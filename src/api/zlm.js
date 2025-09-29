@@ -1,7 +1,5 @@
 import axios from "axios";
 
-const isTrue = (value) => String(value).toLowerCase() === 'true';
-
 export const globalParam = {
   baseUrl: getBaseUrl(),
   vhost: '__defaultVhost__',
@@ -11,7 +9,7 @@ export const globalParam = {
 
 // type为1则为http(s)，type为2则为ws(s)
 export function getBaseUrl(type = 1) {
-  const useSsl = isTrue(process.env.VUE_APP_ZLMEDIAKIT_IS_SSL);
+  const useSsl = process.env.VUE_APP_ZLMEDIAKIT_IS_SSL === 'true';
   const prefix = type === 2
     ? useSsl ? 'wss://' : 'ws://'
     : useSsl ? 'https://' : 'http://';

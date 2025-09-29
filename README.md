@@ -43,5 +43,5 @@
 ## 环境配置与构建
 
 - 新增 `.env.development`、`.env.staging`、`.env.test`、`.env.production` 多环境配置文件，可通过 `--mode <env>` 切换；变量名前缀均为 `VUE_APP_`
-- 常用命令：`npm run serve:dev`、`npm run serve:staging`、`npm run serve:test`、`npm run build:prod`、`npm run build:staging`、`npm run build:test`
+- 常用命令：`npm run serve:dev`、`npm run serve:staging`、`npm run serve:test`、`npm run build`（默认采用生产模式）、`npm run build:prod`、`npm run build:staging`、`npm run build:test`
 - `push_streams.sh` 支持通过 `MODE=<env>` 指定环境文件，例如 `MODE=staging ./push_streams.sh`
