@@ -9,6 +9,7 @@ import { routesObj } from "./utils/uitls"
 NProgress.configure({ showSpinner: false });
 
 const whiteList = ['/login'];
+const allowFakeLogin = String(process.env.VUE_APP_FAKE_LOGIN || '').toLowerCase() === 'true';
 
 router.beforeEach(async(to, from, next) => {
     NProgress.start();
@@ -53,7 +54,7 @@ router.beforeEach(async(to, from, next) => {
         if (whiteList.indexOf(to.path) !== -1) {
             next();
         } else {
-            if (process.env.VUE_APP_FAKE_LOGIN) {
+            if (allowFakeLogin) {
                 store.dispatch('user/login', {username: 'admin', password: '666666'});
                 NProgress.done();
             } else {

@@ -4,7 +4,14 @@
   "private": true,
   "scripts": {
     "serve": "vue-cli-service serve",
+    "serve:dev": "vue-cli-service serve --mode development",
+    "serve:staging": "vue-cli-service serve --mode staging",
+    "serve:test": "vue-cli-service serve --mode test",
     "build": "vue-cli-service build",
+    "build:prod": "vue-cli-service build --mode production",
+    "build:dev": "vue-cli-service build --mode development",
+    "build:staging": "vue-cli-service build --mode staging",
+    "build:test": "vue-cli-service build --mode test",
     "lint": "vue-cli-service lint"
   },
   "dependencies": {

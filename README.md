@@ -39,3 +39,9 @@
 - 项目内置了 `push_streams.sh` 脚本，用于推流模拟和流测试（在 Windows 环境下，可以使用 WSL、Git Bash 或 Aechoterm 运行该脚本）。具体操作请参见项目文档。
 - 项目未接入 GB28181 协议，你可以将这个项目作为 ZLMediaKit 的调试助手，或作为个人视频流管理后台进行个性化修改。
 - 项目不包含后端代码，所有接口来源于 ZLMediaKit 服务。
+
+## 环境配置与构建
+
+- 新增 `.env.development`、`.env.staging`、`.env.test`、`.env.production` 多环境配置文件，可通过 `--mode <env>` 切换；变量名前缀均为 `VUE_APP_`
+- 常用命令：`npm run serve:dev`、`npm run serve:staging`、`npm run serve:test`、`npm run build:prod`、`npm run build:staging`、`npm run build:test`
+- `push_streams.sh` 支持通过 `MODE=<env>` 指定环境文件，例如 `MODE=staging ./push_streams.sh`

@@ -18,9 +18,16 @@
 # ffmpeg -f gdigrab -framerate 30 -i desktop -c:v libx264 -preset ultrafast -tune zerolatency -pix_fmt yuv420p -f flv rtmp://127.0.0.1:1935/live/myDesk1
 
 # 读取 .env 文件并导出环境变量
-if [ "$NODE_ENV" == "production" ]; then
-  ENV_FILE=".env.production"
-else
+ENV_NAME=${MODE:-$NODE_ENV}
+
+if [ -z "$ENV_NAME" ]; then
+  ENV_NAME="development"
+fi
+
+ENV_FILE=".env.$ENV_NAME"
+
+if [ ! -f "$ENV_FILE" ]; then
+  echo "未找到 .env.$ENV_NAME，回退到 .env.development"
   ENV_FILE=".env.development"
 fi
 

@@ -1,24 +1,23 @@
 import axios from "axios";
 
+const isTrue = (value) => String(value).toLowerCase() === 'true';
+
 export const globalParam = {
-  // 这里目前直接指定http，后续可以直接修改，或者加到配置文件
   baseUrl: getBaseUrl(),
   vhost: '__defaultVhost__',
   apiUrlPrefix: '/index/api/',
   secret: process.env.VUE_APP_ZLMEDIAKIT_HTTP_SECRET
 };
 
-// 将 getHttpStr 定义为一个独立的函数，并导出
 // type为1则为http(s)，type为2则为ws(s)
-
 export function getBaseUrl(type = 1) {
-  let prefix
-  if (type === 2) {
-    prefix = process.env.VUE_APP_ZLMEDIAKIT_IS_SSL === true ? 'wss://' : 'ws://'
-  } else {
-    prefix = process.env.VUE_APP_ZLMEDIAKIT_IS_SSL === true ? 'https://' : 'http://'
-  }
-  return prefix + process.env.VUE_APP_ZLMEDIAKIT_SERVICE_IP + ':' + process.env.VUE_APP_ZLMEDIAKIT_HTTP_PORT;
+  const useSsl = isTrue(process.env.VUE_APP_ZLMEDIAKIT_IS_SSL);
+  const prefix = type === 2
+    ? useSsl ? 'wss://' : 'ws://'
+    : useSsl ? 'https://' : 'http://';
+  const port = process.env.VUE_APP_ZLMEDIAKIT_HTTP_PORT ? `:${process.env.VUE_APP_ZLMEDIAKIT_HTTP_PORT}` : '';
+  const host = process.env.VUE_APP_ZLMEDIAKIT_SERVICE_IP || '127.0.0.1';
+  return `${prefix}${host}${port}`;
 }
 
 // 创建一个自定义的 Axios 实例
@@ -211,4 +210,3 @@ export function getThreadsLoad() {
     }
   });
 }
-
