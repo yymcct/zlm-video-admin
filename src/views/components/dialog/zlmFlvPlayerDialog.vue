@@ -57,6 +57,7 @@
             <a-descriptions-item label="音频编码">{{ mediaInfo.audioCodec || '-' }}</a-descriptions-item>
             <a-descriptions-item label="分辨率">{{ mediaInfo.resolution || '-' }}</a-descriptions-item>
             <a-descriptions-item label="FPS">{{ mediaInfo.fps || '-' }}</a-descriptions-item>
+            <a-descriptions-item label="重连次数">{{ retryCount }} / {{ maxRetry }}</a-descriptions-item>
           </a-descriptions>
           <!-- 错误日志 -->
           <div v-if="errorLogs.length" class="error-log">
@@ -112,6 +113,10 @@ export default {
       },
       errorLogs: [],
       statsTimer: null,
+      retryTimer: null,
+      retryCount: 0,
+      maxRetry: 5,
+      videoListeners: {},  // 保存 video 事件处理函数引用，用于精确移除
     };
   },
   computed: {
@@ -147,6 +152,7 @@ export default {
       this.errorLogs = [];
       this.connected = false;
       this.playing = false;
+      this.retryCount = 0;
       this.statusText = '正在连接...';
 
       // 从 record.generateOriginUrl 中筛选出 HTTP-FLV URL
@@ -181,12 +187,13 @@ export default {
         { type: 'flv', url, isLive: true, hasAudio: true, hasVideo: true },
         {
           enableWorker: false,
-          lazyLoadMaxDuration: 3 * 60,
-          seekType: 'range',
-          stashInitialSize: 128,
+          // ★ 直播流必须关闭 lazyLoad，否则缓冲超过 lazyLoadMaxDuration 后会主动停止拉流
+          lazyLoad: false,
+          stashInitialSize: 256,
           autoCleanupSourceBuffer: true,
-          autoCleanupMaxBackwardDuration: 10,
-          autoCleanupMinBackwardDuration: 5,
+          // 适当放宽 cleanup 范围，避免过于激进地清除缓冲区导致中断
+          autoCleanupMaxBackwardDuration: 60,
+          autoCleanupMinBackwardDuration: 30,
         }
       );
 
@@ -197,13 +204,16 @@ export default {
         this.errorLogs.unshift(msg);
         if (this.errorLogs.length > 20) this.errorLogs.pop();
         this.connected = false;
-        this.statusText = '播放错误: ' + errType;
         this.loading = false;
+        this.scheduleRetry(url);
       });
 
       this.flvPlayer.on(flvjs.Events.LOADING_COMPLETE, () => {
+        // 直播流不应触发此事件；若触发说明服务端关闭了连接，尝试重连
+        const msg = `[${new Date().toLocaleTimeString()}] 服务端连接关闭，尝试重连...`;
+        this.errorLogs.unshift(msg);
         this.connected = false;
-        this.statusText = '加载完成';
+        this.scheduleRetry(url);
       });
 
       this.flvPlayer.on(flvjs.Events.RECOVERED_EARLY_EOF, () => {
@@ -219,6 +229,7 @@ export default {
           this.mediaInfo.fps = info.fps || '';
         }
         this.connected = true;
+        this.retryCount = 0;  // 连接成功后重置重试计数
         this.statusText = '';
         this.loading = false;
       });
@@ -234,20 +245,29 @@ export default {
         this.loading = false;
       });
 
-      videoEl.addEventListener('playing', () => {
-        this.playing = true;
-        this.connected = true;
-        this.statusText = '';
-        this.loading = false;
+      // 先移除旧监听器，再注册新的，防止重载时监听器堆积
+      this.removeVideoListeners(videoEl);
+      this.videoListeners = {
+        playing: () => {
+          this.playing = true;
+          this.connected = true;
+          this.retryCount = 0;
+          this.statusText = '';
+          this.loading = false;
+        },
+        pause: () => { this.playing = false; },
+        waiting: () => { this.statusText = '缓冲中...'; },
+        canplay: () => { this.statusText = ''; },
+      };
+      Object.entries(this.videoListeners).forEach(([evt, fn]) => {
+        videoEl.addEventListener(evt, fn);
       });
-      videoEl.addEventListener('pause', () => { this.playing = false; });
-      videoEl.addEventListener('waiting', () => { this.statusText = '缓冲中...'; });
-      videoEl.addEventListener('canplay', () => { this.statusText = ''; });
 
       this.flvPlayer.load();
       this.flvPlayer.play();
 
       // 轮询 video 元素状态更新时间/缓冲
+      if (this.statsTimer) clearInterval(this.statsTimer);
       this.statsTimer = setInterval(() => {
         if (videoEl) {
           this.stats.currentTime = videoEl.currentTime ? videoEl.currentTime.toFixed(2) : 0;
@@ -260,11 +280,44 @@ export default {
       }, 500);
     },
 
+    scheduleRetry(url) {
+      if (this.retryTimer) return; // 已在等待重连
+      if (this.retryCount >= this.maxRetry) {
+        this.statusText = `重连失败，已达最大重试次数 (${this.maxRetry})`;
+        return;
+      }
+      this.retryCount++;
+      const delay = Math.min(2000 * this.retryCount, 10000); // 递增延迟，最长10s
+      this.statusText = `连接中断，${delay / 1000}s 后进行第 ${this.retryCount}/${this.maxRetry} 次重连...`;
+      this.retryTimer = setTimeout(() => {
+        this.retryTimer = null;
+        if (this.showModal) {
+          // 销毁旧播放器但保留 errorLogs
+          if (this.statsTimer) { clearInterval(this.statsTimer); this.statsTimer = null; }
+          if (this.flvPlayer) {
+            try {
+              this.flvPlayer.pause(); this.flvPlayer.unload();
+              this.flvPlayer.detachMediaElement(); this.flvPlayer.destroy();
+            } catch (e) { /* ignore */ }
+            this.flvPlayer = null;
+          }
+          this.createFlvPlayer(url);
+        }
+      }, delay);
+    },
+
     destroyPlayer() {
+      if (this.retryTimer) {
+        clearTimeout(this.retryTimer);
+        this.retryTimer = null;
+      }
       if (this.statsTimer) {
         clearInterval(this.statsTimer);
         this.statsTimer = null;
       }
+      // 精确移除已绑定的 video 事件，防止监听器堆积
+      const videoEl = this.$refs.videoEl;
+      if (videoEl) this.removeVideoListeners(videoEl);
       if (this.flvPlayer) {
         try {
           this.flvPlayer.pause();
@@ -277,6 +330,14 @@ export default {
       this.playing = false;
       this.connected = false;
       this.statusText = '';
+      this.retryCount = 0;
+    },
+
+    removeVideoListeners(videoEl) {
+      Object.entries(this.videoListeners).forEach(([evt, fn]) => {
+        videoEl.removeEventListener(evt, fn);
+      });
+      this.videoListeners = {};
     },
 
     switchUrl(url) {

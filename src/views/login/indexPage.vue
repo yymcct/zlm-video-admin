@@ -1,6 +1,6 @@
 <template>
   <div id="login">
-    <a-card title="zlm流媒体管理后台" class="card-style" :bordered="false">
+    <a-card title="大华流媒体管理后台" class="card-style" :bordered="false">
       <a-form
         id="normal-login"
         :form="form"

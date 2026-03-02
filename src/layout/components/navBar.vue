@@ -1,7 +1,7 @@
 <template>
   <div>
     <div class="logo">
-      <span v-show="logo">zlm流媒体管理后台</span>
+      <span v-show="logo">大华流媒体管理后台</span>
       <span v-show="!logo">Z</span>
     </div>
     <a-menu theme="dark" :selectedKeys="[$route.path]" @click="handelClick" mode="inline" v-for="item in list" :key="item.name">
