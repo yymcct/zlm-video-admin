@@ -74,6 +74,8 @@
           <a @click="previewMp4Back(text, record)"><a-icon type="eye"/> 预览MP4录像</a>
         <a-divider type="vertical"/>
         </span>
+        <a @click="openFlvPlayer(record)"><a-icon type="play-circle"/> 播放</a>
+        <a-divider type="vertical"/>
         <a-popconfirm title="确定关闭流吗？" @confirm="deleteStream(text, record)">
           <a-icon slot="icon" type="question-circle-o" style="color: red" />
           <a><a-icon type="delete"/> 关闭流</a>
@@ -83,6 +85,7 @@
     <zlm-pull-dialog :show-modal.sync="visiblePullDialog" @submit="submitPull"/>
     <zlm-play-dialog :current-data="playDialog.currentData" :show-modal.sync="playDialog.visible" />
     <zlm-mp4-back-dialog :current-stream="backDialog.currentStream" :show-modal.sync="backDialog.visible"/>
+    <zlm-flv-player-dialog :record="flvPlayerDialog.record" :show-modal.sync="flvPlayerDialog.visible"/>
   </div>
 </template>
 
@@ -90,6 +93,7 @@
 import zlmPullDialog from "@/views/components/dialog/zlmPullDialog";
 import zlmMp4BackDialog from "@/views/components/dialog/zlmMp4BackDialog";
 import zlmPlayDialog from "@/views/components/dialog/zlmPlayDialog";
+import zlmFlvPlayerDialog from "@/views/components/dialog/zlmFlvPlayerDialog";
 import {getMediaList, closeStreamsById, startRecordMp4, stopRecordMp4} from "@/api/zlm";
 
 export default {
@@ -97,6 +101,7 @@ export default {
     zlmPullDialog,
     zlmMp4BackDialog,
     zlmPlayDialog,
+    zlmFlvPlayerDialog,
   },
   data() {
     return {
@@ -138,6 +143,10 @@ export default {
         currentStream: ''
       },
       visiblePullDialog: false,
+      flvPlayerDialog: {
+        visible: false,
+        record: {},
+      },
     };
   },
   created() {
@@ -254,6 +263,10 @@ export default {
         this.$message.error(err.message || "关闭拉流代理失败");
       });
     },
+    openFlvPlayer(record) {
+      this.flvPlayerDialog.record = record;
+      this.flvPlayerDialog.visible = true;
+    },
     getOriginTypeText(type) {
       let typeText = "未知";
       switch (type) {
@@ -300,8 +313,8 @@ export default {
           `rtmps://${host}/${app}/${streamId}`,
           `rtmp://127.0.0.1/${app}/${streamId}?vhost=${host}`,
           `rtmps://127.0.0.1/${app}/${streamId}?vhost=${host}`,
-          `http://${host}/${app}/${streamId}.live.flv`,
-          `https://${host}/${app}/${streamId}.live.flv`,
+          `http://192.168.1.119/${app}/${streamId}.live.flv`,
+          `https://192.168.1.119/${app}/${streamId}.live.flv`,
           `http://127.0.0.1${port}/${app}/${streamId}.live.flv?vhost=${host}`,
           `https://127.0.0.1${port}/${app}/${streamId}.live.flv?vhost=${host}`,
           `ws://${host}/${app}/${streamId}.live.flv`,
