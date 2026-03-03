@@ -9,6 +9,15 @@ const router = [
     },
   },
   {
+    path: "/vod",
+    name: "VodPlayerPage",
+    component: "/vod/vodPlayerPage",
+    meta: {
+      title: "流媒体点播",
+      icon: "video-camera",
+    },
+  },
+  {
     path: "/zlm",
     name: "zlm",
     redirect: '/zlm/setPage',
