@@ -175,7 +175,7 @@ export default {
       this.errorLogs = [];
 
       try {
-        await this.sendStartStream(this.deviceId);
+        //await this.sendStartStream(this.deviceId);
       } catch (e) {
         this.$message.error('推流启动指令发送失败，请检查推流服务是否正常');
         this.loading = false;
@@ -191,10 +191,10 @@ export default {
     },
 
     async stopPlay() {
-      const deviceId = this.deviceId;
+      //const deviceId = this.deviceId;
       this.destroyPlayer();
       this.flvUrl = '';
-      await this.sendStopStream(deviceId);
+      //await this.sendStopStream(deviceId);
       this.$message.success('已停止播放并发送停止推流指令');
     },
 
