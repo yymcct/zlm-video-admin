@@ -89,12 +89,15 @@
         </div>
       </a-collapse-panel>
     </a-collapse>
+
+    <remote-talk-card :device-id.sync="deviceId" />
   </div>
 </template>
 
 <script>
 import axios from 'axios';
 import flvjs from 'flv.js';
+import RemoteTalkCard from './components/remoteTalkCard.vue';
 
 const STREAM_API_BASE = 'http://192.168.1.119:5002/api/v1/stream';
 const FLV_BASE = 'http://192.168.1.119:8080/live';
@@ -102,6 +105,9 @@ const RTMP_BASE = 'rtmp://192.168.1.119:1945/live';
 
 export default {
   name: 'VodPlayerPage',
+  components: {
+    RemoteTalkCard,
+  },
   data() {
     return {
       deviceId: '',
