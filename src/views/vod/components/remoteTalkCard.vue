@@ -8,24 +8,12 @@
       <a-tag :color="statusColor" class="talk-status">{{ statusText }}</a-tag>
     </div>
 
-    <div class="talk-form-row">
-      <div class="talk-form-item">
-        <span class="talk-label">中继地址</span>
-        <a-input
-          v-model="serverUrl"
-          :disabled="isBusy"
-          placeholder="例如: http://192.168.1.119:5002"
-          @pressEnter="startCall"
-        />
-      </div>
-    </div>
-
     <div class="talk-actions">
       <a-button
         type="primary"
         icon="phone"
         :loading="calling"
-        :disabled="isBusy || !deviceId || !serverUrl"
+        :disabled="isBusy || !deviceId"
         @click="startCall"
       >
         发起喊话
@@ -64,22 +52,12 @@
       </div>
     </div>
 
-    <a-collapse :bordered="false" class="talk-log-collapse">
-      <a-collapse-panel key="1" header="会话日志">
-        <div class="talk-log-list">
-          <div v-for="(item, index) in logs" :key="index" class="talk-log-item">
-            {{ item }}
-          </div>
-          <div v-if="!logs.length" class="talk-log-empty">暂无日志</div>
-        </div>
-      </a-collapse-panel>
-    </a-collapse>
   </a-card>
 </template>
 
 <script>
 import { io } from 'socket.io-client';
-import { getDefaultVoiceServerUrl, initiateVoiceCall, terminateVoiceCall } from '@/api/voice';
+import { initiateVoiceCall, terminateVoiceCall } from '@/api/voice';
 
 const STATUS = {
   idle: '未连接',
@@ -99,10 +77,11 @@ export default {
   },
   data() {
     return {
-      serverUrl: getDefaultVoiceServerUrl(),
       socket: null,
       mediaStream: null,
-      mediaRecorder: null,
+      audioContext: null,
+      audioWorkletNode: null,
+      audioEncoder: null,
       sessionId: '',
       status: 'idle',
       calling: false,
@@ -111,11 +90,9 @@ export default {
       sentCount: 0,
       recvCount: 0,
       droppedCount: 0,
-      logs: [],
       callStartTs: 0,
       callDurationSeconds: 0,
       durationTimer: null,
-      recorderMimeType: '',
     };
   },
   computed: {
@@ -145,23 +122,6 @@ export default {
     this.endCall({ silent: true });
   },
   methods: {
-    addLog(message) {
-      const time = new Date().toLocaleTimeString();
-      this.logs.unshift(`[${time}] ${message}`);
-      if (this.logs.length > 80) {
-        this.logs.pop();
-      }
-    },
-    normalizeServerUrl(url) {
-      let normalized = (url || '').trim();
-      if (!normalized) {
-        return '';
-      }
-      if (!/^https?:\/\//i.test(normalized)) {
-        normalized = `http://${normalized}`;
-      }
-      return normalized.replace(/\/$/, '');
-    },
     async startCall() {
       if (this.isBusy) {
         return;
@@ -170,13 +130,6 @@ export default {
         this.$message.warning('请先选择设备 ID');
         return;
       }
-      const serverUrl = this.normalizeServerUrl(this.serverUrl);
-      if (!serverUrl) {
-        this.$message.warning('请先填写中继地址');
-        return;
-      }
-
-      this.serverUrl = serverUrl;
       this.calling = true;
       this.status = 'calling';
       this.sentCount = 0;
@@ -184,23 +137,22 @@ export default {
       this.droppedCount = 0;
       this.callDurationSeconds = 0;
       this.callStartTs = 0;
-      this.logs = [];
 
       try {
-        this.addLog('正在发起喊话请求...');
-        const { data } = await initiateVoiceCall(serverUrl, this.deviceId);
+        console.log('正在发起喊话请求...');
+        const { data } = await initiateVoiceCall(this.deviceId);
         if (!data || !data.success || !data.session_id) {
           throw new Error((data && data.error) || '服务端返回异常');
         }
 
         this.sessionId = data.session_id;
-        this.addLog(`呼叫请求成功，会话ID: ${this.sessionId}`);
-        this.addLog(`设备通知状态: ${data.device_notified ? '已通知' : '未通知'}`);
+        console.log(`呼叫请求成功，会话ID: ${this.sessionId}`);
+        console.log(`设备通知状态: ${data.device_notified ? '已通知' : '未通知'}`);
 
-        await this.connectSocket(serverUrl);
+        await this.connectSocket(data.websocket_url);
       } catch (error) {
         this.status = 'error';
-        this.addLog(`发起喊话失败: ${error.message || error}`);
+        console.log(`发起喊话失败: ${error.message || error}`);
         this.$message.error(`发起喊话失败: ${error.message || '未知错误'}`);
         this.cleanup(false);
       } finally {
@@ -213,7 +165,7 @@ export default {
         this.socket = null;
       }
 
-      this.addLog('正在连接语音 WebSocket...');
+      console.log('正在连接语音 WebSocket...');
 
       return new Promise((resolve, reject) => {
         const socket = io(serverUrl, {
@@ -237,7 +189,7 @@ export default {
         socket.on('connect', async () => {
           this.socket = socket;
           this.status = 'waiting';
-          this.addLog('WebSocket 已连接，准备加入会话');
+          console.log('WebSocket 已连接，准备加入会话');
 
           socket.emit('browser_join', {
             device_id: this.deviceId,
@@ -248,24 +200,24 @@ export default {
         });
 
         socket.on('connect_error', (err) => {
-          this.addLog(`WebSocket 连接失败: ${err.message || err}`);
+          console.log(`WebSocket 连接失败: ${err.message || err}`);
           finishReject(new Error('WebSocket 连接失败'));
         });
 
         socket.on('server_ready', (data) => {
-          this.addLog(`服务端就绪: ${(data && data.message) || 'ok'}`);
+          console.log(`服务端就绪: ${(data && data.message) || 'ok'}`);
         });
 
         socket.on('joined', (data) => {
-          this.addLog(`已加入会话，角色: ${(data && data.role) || 'browser'}`);
+          console.log(`已加入会话，角色: ${(data && data.role) || 'browser'}`);
           if (data && data.waiting_for_device) {
             this.status = 'waiting';
-            this.addLog('等待设备端连接...');
+            console.log('等待设备端连接...');
           }
         });
 
         socket.on('call_established', async () => {
-          this.addLog('通话已建立，开始采集麦克风音频');
+          console.log('通话已建立，开始采集麦克风音频');
           this.status = 'connected';
           this.inCall = true;
           this.callStartTs = Date.now();
@@ -273,7 +225,7 @@ export default {
           try {
             await this.startMicStreaming();
           } catch (err) {
-            this.addLog(`麦克风启动失败: ${err.message || err}`);
+            console.log(`麦克风启动失败: ${err.message || err}`);
             this.$message.error('无法访问麦克风，请检查浏览器权限');
             this.endCall();
           }
@@ -284,28 +236,28 @@ export default {
         });
 
         socket.on('peer_hangup', () => {
-          this.addLog('对端已挂断');
+          console.log('对端已挂断');
           this.endCall({ silent: true });
         });
 
         socket.on('peer_disconnected', () => {
-          this.addLog('对端已断开连接');
+          console.log('对端已断开连接');
           this.status = 'waiting';
         });
 
         socket.on('call_terminated', (data) => {
-          this.addLog(`通话终止: ${(data && data.message) || '未知原因'}`);
+          console.log(`通话终止: ${(data && data.message) || '未知原因'}`);
           this.endCall({ silent: true });
         });
 
         socket.on('error', (data) => {
           const msg = (data && data.message) || '未知错误';
-          this.addLog(`会话错误: ${msg}`);
+          console.log(`会话错误: ${msg}`);
           this.status = 'error';
         });
 
         socket.on('disconnect', () => {
-          this.addLog('WebSocket 已断开');
+          console.log('WebSocket 已断开');
           if (this.inCall || this.calling) {
             this.endCall({ silent: true });
           }
@@ -316,6 +268,9 @@ export default {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         throw new Error('当前浏览器不支持麦克风采集');
       }
+      if (typeof window.AudioEncoder === 'undefined') {
+        throw new Error('当前浏览器不支持 WebCodecs AudioEncoder，请使用 Chrome 94+ / Edge 94+ / Firefox 130+ 或更新版本');
+      }
 
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
@@ -324,84 +279,89 @@ export default {
           noiseSuppression: true,
         },
       });
-
       this.mediaStream = stream;
       this.muted = false;
 
-      const mimeType = this.pickRecorderMimeType();
-      this.recorderMimeType = mimeType;
-      const recorder = mimeType
-        ? new MediaRecorder(stream, { mimeType, audioBitsPerSecond: 24000 })
-        : new MediaRecorder(stream, { audioBitsPerSecond: 24000 });
+      // AudioContext 固定 16kHz，浏览器自动将麦克风采样率重采样至 16kHz
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      const audioCtx = new AudioCtx({ sampleRate: 16000 });
+      this.audioContext = audioCtx;
 
-      recorder.ondataavailable = async (event) => {
-        if (!event.data || !event.data.size) {
-          return;
-        }
-        if (!this.socket || !this.socket.connected || !this.inCall) {
-          this.droppedCount += 1;
-          return;
-        }
-
-        try {
-          const base64Audio = await this.blobToBase64(event.data);
-          this.socket.emit('audio_data', {
-            audio: base64Audio,
-            mime_type: this.recorderMimeType || event.data.type || 'audio/webm',
-            timestamp: Date.now(),
-            session_id: this.sessionId,
-            device_id: this.deviceId,
-            source: 'browser',
-          });
-          this.sentCount += 1;
-        } catch (err) {
-          this.droppedCount += 1;
-          this.addLog(`音频编码失败: ${err.message || err}`);
-        }
-      };
-
-      recorder.onerror = (event) => {
-        const reason = event && event.error ? event.error.message : '未知错误';
-        this.addLog(`录音器错误: ${reason}`);
-      };
-
-      recorder.start(250);
-      this.mediaRecorder = recorder;
-      this.addLog(`麦克风采集已开启，编码格式: ${this.recorderMimeType || '浏览器默认'}`);
-    },
-    pickRecorderMimeType() {
-      const mimeCandidates = [
-        'audio/webm;codecs=opus',
-        'audio/webm',
-        'audio/ogg;codecs=opus',
-      ];
-      if (typeof MediaRecorder === 'undefined') {
-        return '';
-      }
-      for (let i = 0; i < mimeCandidates.length; i += 1) {
-        const type = mimeCandidates[i];
-        if (MediaRecorder.isTypeSupported(type)) {
-          return type;
-        }
-      }
-      return '';
-    },
-    blobToBase64(blob) {
-      return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          const result = reader.result || '';
-          const chunks = String(result).split(',');
-          if (chunks.length < 2) {
-            reject(new Error('无效音频数据'));
+      // WebCodecs AudioEncoder：输出裸 Opus 包（RFC 6716，无容器），每包 20ms
+      const audioEncoder = new window.AudioEncoder({
+        output: (chunk) => {
+          if (!this.socket || !this.socket.connected || !this.inCall) {
+            this.droppedCount += 1;
             return;
           }
-          resolve(chunks[1]);
-        };
-        reader.onerror = () => reject(new Error('读取音频失败'));
-        reader.readAsDataURL(blob);
+          const buf = new ArrayBuffer(chunk.byteLength);
+          chunk.copyTo(buf);
+          // 直接发裸二进制，不包 JSON 对象
+          // python-socketio 收到的是纯 bytes，可直接 opuslib.Decoder.decode(data, 320)
+          this.socket.emit('audio_data', buf);
+          this.sentCount += 1;
+        },
+        error: (err) => {
+          console.log(`Opus 编码器错误: ${err.message || err}`);
+        },
       });
+      audioEncoder.configure({
+        codec: 'opus',
+        sampleRate: 16000,
+        numberOfChannels: 1,
+        bitrate: 24000,
+        frameDuration: 20000, // 20ms，单位为微秒
+      });
+      this.audioEncoder = audioEncoder;
+
+      // AudioWorklet：从 Web Audio 图中逐块（128 样本）抓取 Float32 PCM
+      const workletCode = `
+        class PcmCaptureProcessor extends AudioWorkletProcessor {
+          process(inputs) {
+            const ch = inputs[0] && inputs[0][0];
+            if (ch && ch.length) {
+              // slice() 复制一份，避免浏览器复用内部缓冲区
+              const copy = ch.slice();
+              this.port.postMessage(copy.buffer, [copy.buffer]);
+            }
+            return true;
+          }
+        }
+        registerProcessor('pcm-capture-processor', PcmCaptureProcessor);
+      `;
+      const blob = new Blob([workletCode], { type: 'application/javascript' });
+      const workletUrl = URL.createObjectURL(blob);
+      await audioCtx.audioWorklet.addModule(workletUrl);
+      URL.revokeObjectURL(workletUrl);
+
+      const source = audioCtx.createMediaStreamSource(stream);
+      const workletNode = new AudioWorkletNode(audioCtx, 'pcm-capture-processor');
+      this.audioWorkletNode = workletNode;
+
+      // 累计样本数，用于生成连续递增的微秒时间戳
+      let sampleCount = 0;
+      workletNode.port.onmessage = (event) => {
+        const samples = new Float32Array(event.data);
+        const timestampUs = Math.round(sampleCount / 16000 * 1e6);
+        sampleCount += samples.length;
+        const audioData = new window.AudioData({
+          format: 'f32',
+          sampleRate: 16000,
+          numberOfFrames: samples.length,
+          numberOfChannels: 1,
+          timestamp: timestampUs,
+          data: samples,
+        });
+        audioEncoder.encode(audioData);
+        audioData.close();
+      };
+
+      source.connect(workletNode);
+      // 接入 destination，防止 Chrome 因无输出节点而挂起 AudioContext
+      workletNode.connect(audioCtx.destination);
+      console.log('麦克风采集已开启，采样率: 16000Hz，单声道，帧长: 20ms，编码: Opus（WebCodecs）');
     },
+
     toggleMute() {
       if (!this.mediaStream) {
         return;
@@ -411,7 +371,7 @@ export default {
         track.enabled = enabled;
       });
       this.muted = !enabled;
-      this.addLog(this.muted ? '麦克风已静音' : '麦克风已取消静音');
+      console.log(this.muted ? '麦克风已静音' : '麦克风已取消静音');
     },
     startDurationTimer() {
       this.stopDurationTimer();
@@ -430,22 +390,39 @@ export default {
       }
     },
     stopMediaRecorder() {
-      if (this.mediaRecorder) {
+      if (this.audioWorkletNode) {
         try {
-          if (this.mediaRecorder.state !== 'inactive') {
-            this.mediaRecorder.stop();
+          this.audioWorkletNode.port.onmessage = null;
+          this.audioWorkletNode.disconnect();
+        } catch (error) {
+          // Ignore worklet disconnect errors.
+        }
+        this.audioWorkletNode = null;
+      }
+      if (this.audioEncoder) {
+        try {
+          if (this.audioEncoder.state !== 'closed') {
+            this.audioEncoder.close();
           }
         } catch (error) {
-          // Ignore recorder stop errors from browser edge cases.
+          // Ignore encoder close errors.
         }
-        this.mediaRecorder = null;
+        this.audioEncoder = null;
+      }
+      if (this.audioContext) {
+        try {
+          this.audioContext.close();
+        } catch (error) {
+          // Ignore audio context close errors.
+        }
+        this.audioContext = null;
       }
       if (this.mediaStream) {
         this.mediaStream.getTracks().forEach((track) => track.stop());
         this.mediaStream = null;
       }
     },
-    cleanup(resetLogs = false) {
+    cleanup() {
       this.stopDurationTimer();
       this.stopMediaRecorder();
 
@@ -467,29 +444,25 @@ export default {
       this.callDurationSeconds = 0;
       this.status = 'idle';
 
-      if (resetLogs) {
-        this.logs = [];
-      }
     },
     async endCall(options = {}) {
       const { silent = false } = options;
       const socket = this.socket;
       const sessionId = this.sessionId;
-      const serverUrl = this.normalizeServerUrl(this.serverUrl);
 
       this.stopDurationTimer();
       this.stopMediaRecorder();
 
-      if (sessionId && serverUrl) {
+      if (sessionId) {
         try {
-          this.addLog('正在请求服务端终止会话...');
-          const { data } = await terminateVoiceCall(serverUrl, sessionId);
+          console.log('正在请求服务端终止会话...');
+          const { data } = await terminateVoiceCall(sessionId);
           if (data && data.success === false) {
             throw new Error(data.error || '服务端终止失败');
           }
-          this.addLog('服务端终止会话请求成功');
+          console.log('服务端终止会话请求成功');
         } catch (error) {
-          this.addLog(`服务端终止会话请求失败: ${error.message || error}`);
+          console.log(`服务端终止会话请求失败: ${error.message || error}`);
         }
       }
 
@@ -508,7 +481,7 @@ export default {
       if (!silent) {
         this.$message.success('喊话已结束');
       }
-      this.addLog('会话已结束');
+      console.log('会话已结束');
     },
   },
 };
@@ -547,24 +520,6 @@ export default {
 
 .talk-status {
   margin-right: 0;
-}
-
-.talk-form-row {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-  margin-bottom: 14px;
-}
-
-.talk-form-item {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.talk-label {
-  font-size: 12px;
-  color: #595959;
 }
 
 .talk-actions {
@@ -607,39 +562,34 @@ export default {
   color: #8c8c8c;
 }
 
-.talk-log-collapse {
-  background: #fafafa;
-  border-radius: 6px;
-}
-
-.talk-log-list {
-  max-height: 180px;
-  overflow: auto;
-  background: #111;
-  border-radius: 6px;
-  padding: 8px;
-}
-
-.talk-log-item {
-  font-family: Consolas, 'Courier New', monospace;
-  font-size: 12px;
-  color: #d9f7be;
-  line-height: 1.5;
-  word-break: break-all;
-}
-
-.talk-log-empty {
-  font-size: 12px;
-  color: #8c8c8c;
-}
-
 @media (max-width: 900px) {
-  .talk-form-row {
-    grid-template-columns: 1fr;
-  }
-
   .talk-stats {
     grid-template-columns: 1fr;
   }
 }
 </style>
+
+<!-- 发送到服务端的 audio_data 数据包格式：
+  socket.emit('audio_data', ArrayBuffer)
+  ── 裸二进制，无任何 JSON 包装 ──
+
+  内容：裸 Opus 帧（RFC 6716），16kHz 单声道，24kbps，每包 20ms（320 样本）
+  无容器封装，可直接传入 opuslib.Decoder.decode() 解码为 PCM
+
+  Python 中继端接收：
+    @sio.on('audio_data')
+    async def on_audio_data(sid, data):
+        # data 就是 bytes，无需解包任何对象
+        opus_packet = data
+        # 转发给树莓派 ...
+
+  树莓派解码示例（Python）：
+    import opuslib
+    dec = opuslib.Decoder(16000, 1)
+    pcm_bytes = dec.decode(opus_packet, 320)  # 320 = 20ms * 16kHz
+
+  编码链路：
+    getUserMedia → AudioContext(16kHz) → AudioWorklet(PCM Float32 128样本/块)
+    → WebCodecs AudioEncoder(codec:'opus', frameDuration:20000μs) → 裸 Opus 帧
+    → socket.emit('audio_data', ArrayBuffer)
+-->

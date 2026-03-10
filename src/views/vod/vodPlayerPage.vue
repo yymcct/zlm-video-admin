@@ -110,7 +110,7 @@ export default {
   },
   data() {
     return {
-      deviceId: '',
+      deviceId: 'VIGIDOOR_7c3a41081017190d_RPI',
       flvUrl: '',
       flvPlayer: null,
       playing: false,
