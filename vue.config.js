@@ -7,7 +7,7 @@ const zlmProxyTarget = `${isZlmHttps ? 'https' : 'http'}://${zlmServiceHost}${zl
 
 module.exports = defineConfig({
   transpileDependencies: true,
-  publicPath: process.env.NODE_ENV === "production" ? "./" : "/",
+  publicPath: process.env.NODE_ENV === "production" ? "/admin/" : "/",
   configureWebpack: {
     resolve: {
       fallback: {
