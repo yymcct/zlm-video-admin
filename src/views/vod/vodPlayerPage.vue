@@ -142,6 +142,13 @@ export default {
       videoListeners: {},
     };
   },
+  mounted() {
+    const deviceId = this.$route.query.device_id;
+    if (deviceId) {
+      this.deviceId = deviceId;
+      this.$nextTick(() => this.startPlay());
+    }
+  },
   beforeDestroy() {
     this.destroyPlayer();
   },

@@ -9,6 +9,15 @@ const router = [
     },
   },
   {
+    path: "/device",
+    name: "DeviceListPage",
+    component: "/device/deviceListPage",
+    meta: {
+      title: "设备管理",
+      icon: "laptop",
+    },
+  },
+  {
     path: "/vod",
     name: "VodPlayerPage",
     component: "/vod/vodPlayerPage",
