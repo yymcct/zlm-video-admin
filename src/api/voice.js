@@ -20,14 +20,14 @@ export function getDefaultVoiceServerUrl() {
 
 export function initiateVoiceCall(deviceId) {
   const serverUrl = getDefaultVoiceServerUrl();
-  return axios.post(`${serverUrl}/api/v1/voice/call/initiate`, {
+  return axios.post(`${serverUrl}/vigidoor/api/v1/voice/call/initiate`, {
     device_id: deviceId,
   });
 }
 
 export function terminateVoiceCall(sessionId) {
   const serverUrl = getDefaultVoiceServerUrl();
-  return axios.post(`${serverUrl}/api/v1/voice/call/terminate`, {
+  return axios.post(`${serverUrl}/vigidoor/api/v1/voice/call/terminate`, {
     session_id: sessionId,
   });
 }
