@@ -22,7 +22,7 @@
           icon="play-circle"
           @click="playDevice(record)"
         >
-          播放
+          管理
         </a-button>
         <span v-else style="color: #ccc;">-</span>
       </div>

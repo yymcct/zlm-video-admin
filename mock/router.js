@@ -19,10 +19,10 @@ const router = [
   },
   {
     path: "/vod",
-    name: "VodPlayerPage",
+    name: "DeviceManagePage",
     component: "/vod/vodPlayerPage",
     meta: {
-      title: "流媒体点播",
+      title: "设备管理",
       icon: "video-camera",
     },
   },

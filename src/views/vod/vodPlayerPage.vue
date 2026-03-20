@@ -1,7 +1,7 @@
 <template>
   <div class="vod-wrapper">
     <div class="vod-header">
-      <span class="vod-title">流媒体点播</span>
+      <span class="vod-title">设备管理</span>
     </div>
 
     <!-- 布撤防控制 -->
@@ -108,7 +108,7 @@ const FLV_BASE = 'http://192.168.1.119:8080/live';
 const RTMP_BASE = 'rtmp://192.168.1.119:1945/live';
 
 export default {
-  name: 'VodPlayerPage',
+  name: 'DeviceManagePage',
   components: {
     RemoteTalkCard,
     SecurityArmCard,
