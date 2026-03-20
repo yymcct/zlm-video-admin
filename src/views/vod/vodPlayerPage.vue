@@ -4,6 +4,9 @@
       <span class="vod-title">流媒体点播</span>
     </div>
 
+    <!-- 布撤防控制 -->
+    <security-arm-card :device-id="deviceId" />
+
     <!-- 设备ID 输入区 -->
     <div class="input-bar">
       <a-input
@@ -98,6 +101,7 @@
 import axios from 'axios';
 import flvjs from 'flv.js';
 import RemoteTalkCard from './components/remoteTalkCard.vue';
+import SecurityArmCard from './components/securityArmCard.vue';
 
 const STREAM_API_BASE = 'http://192.168.1.119:5002/api/v1/stream';
 const FLV_BASE = 'http://192.168.1.119:8080/live';
@@ -107,6 +111,7 @@ export default {
   name: 'VodPlayerPage',
   components: {
     RemoteTalkCard,
+    SecurityArmCard,
   },
   data() {
     return {

@@ -14,3 +14,19 @@ const deviceAxios = axios.create({
 export function getDeviceList() {
   return deviceAxios.get('/vigidoor/api/v1/devices').then(res => res.data);
 }
+
+/**
+ * 布防 - 向设备下发 arm 指令
+ * POST /vigidoor/api/v1/security/arm
+ */
+export function armDevice(deviceId) {
+  return deviceAxios.post('/vigidoor/api/v1/security/arm', { device_id: deviceId }).then(res => res.data);
+}
+
+/**
+ * 撤防 - 向设备下发 disarm 指令
+ * POST /vigidoor/api/v1/security/disarm
+ */
+export function disarmDevice(deviceId) {
+  return deviceAxios.post('/vigidoor/api/v1/security/disarm', { device_id: deviceId }).then(res => res.data);
+}
