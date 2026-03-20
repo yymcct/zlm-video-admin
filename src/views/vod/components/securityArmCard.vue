@@ -5,7 +5,8 @@
         <a-icon type="safety" class="arm-title-icon" />
         <span class="arm-title">布撤防控制</span>
       </div>
-      <a-tag :color="statusColor" class="arm-status">{{ statusText }}</a-tag>
+      <a-spin v-if="statusLoading" size="small" />
+      <a-tag v-else :color="statusColor" class="arm-status">{{ statusText }}</a-tag>
     </div>
 
     <div class="arm-actions">
@@ -13,7 +14,7 @@
         type="primary"
         icon="lock"
         :loading="arming"
-        :disabled="!deviceId || arming || disarming"
+        :disabled="!deviceId || arming || disarming || statusLoading || state === 'armed'"
         @click="handleArm"
       >
         布防
@@ -22,7 +23,7 @@
         type="danger"
         icon="unlock"
         :loading="disarming"
-        :disabled="!deviceId || arming || disarming"
+        :disabled="!deviceId || arming || disarming || statusLoading || state === 'disarmed'"
         @click="handleDisarm"
       >
         撤防
@@ -35,7 +36,7 @@
 </template>
 
 <script>
-import { armDevice, disarmDevice } from '@/api/device';
+import { armDevice, disarmDevice, getDeviceStatus } from '@/api/device';
 
 const STATUS = {
   idle: { text: '待机', color: 'default' },
@@ -56,6 +57,7 @@ export default {
     return {
       arming: false,
       disarming: false,
+      statusLoading: false,
       state: 'idle',
       lastOperation: '',
     };
@@ -68,7 +70,30 @@ export default {
       return STATUS[this.state]?.color ?? 'default';
     },
   },
+  watch: {
+    deviceId(val) {
+      if (val) this.fetchStatus();
+      else this.state = 'idle';
+    },
+  },
+  mounted() {
+    if (this.deviceId) this.fetchStatus();
+  },
   methods: {
+    async fetchStatus() {
+      this.statusLoading = true;
+      try {
+        const res = await getDeviceStatus(this.deviceId);
+        if (res?.success) {
+          this.state = res.status?.is_armed ? 'armed' : 'disarmed';
+        }
+      } catch (e) {
+        this.$message.error('获取设备状态失败：' + (e?.response?.data?.message || e.message || '请求异常'));
+      } finally {
+        this.statusLoading = false;
+      }
+    },
+
     async handleArm() {
       if (!this.deviceId) {
         this.$message.warning('请先输入 Device ID');

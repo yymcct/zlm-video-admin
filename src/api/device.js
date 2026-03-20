@@ -16,6 +16,14 @@ export function getDeviceList() {
 }
 
 /**
+ * 查询设备布防状态
+ * GET /vigidoor/api/v1/devices/:deviceId/status
+ */
+export function getDeviceStatus(deviceId) {
+  return deviceAxios.get(`/vigidoor/api/v1/devices/${deviceId}/status`).then(res => res.data);
+}
+
+/**
  * 布防 - 向设备下发 arm 指令
  * POST /vigidoor/api/v1/security/arm
  */
